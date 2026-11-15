@@ -279,6 +279,7 @@ small{color:#b7c3d8}h1{color:#72aaff}
 <label for="token">Token Admin</label>
 <input id="token" type="password" autocomplete="off" placeholder="Masukkan ADMIN_TOKEN">
 <form id="f">
+<input type="hidden" name="appId" id="appId">
 <input name="name" placeholder="Nama aplikasi" required>
 <input name="version" placeholder="Versi, contoh 1.0.2" required>
 <textarea name="description" placeholder="Deskripsi aplikasi"></textarea>
@@ -293,7 +294,7 @@ small{color:#b7c3d8}h1{color:#72aaff}
   <option value="Lainnya" selected>Lainnya</option>
 </select>
 
-<input name="apk" type="file" accept=".apk,application/vnd.android.package-archive" required>
+<input name="apk" type="file" accept=".apk,application/vnd.android.package-archive">
 <button id="uploadBtn" type="submit">Upload APK</button>
 </form>
 <p id="msg" role="status" aria-live="polite"></p>
