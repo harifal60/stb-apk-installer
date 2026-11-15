@@ -64,49 +64,175 @@ app.get("/api/apps", (req, res) => {
   }));
   res.json(apps);
 });
+
 app.get("/catalog", (_req, res) => res.send(`<!DOCTYPE html>
 <html lang="id">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>STB APK Store</title>
+<title>STB APK STORE</title>
 <style>
-body{font-family:Arial;background:#101522;color:white;padding:20px;margin:auto;max-width:700px}
-h1{color:#72aaff}
-.item{background:#1b2638;padding:18px;margin:15px 0;border-radius:12px}
-a{display:block;background:#2878e7;color:white;text-align:center;padding:13px;border-radius:8px;text-decoration:none;margin-top:12px}
-small{color:#aaa}
+*{box-sizing:border-box}
+body{
+ margin:0;
+ font-family:Arial,sans-serif;
+ background:linear-gradient(145deg,#080d1b,#111d35,#17112d);
+ color:#fff;
+ min-height:100vh;
+}
+header{
+ padding:30px 20px;
+ background:linear-gradient(120deg,#174cba,#6429a9);
+ border-radius:0 0 28px 28px;
+ box-shadow:0 8px 30px #0006;
+}
+.logo{font-size:34px;font-weight:900;letter-spacing:1px}
+.logo span{color:#8edbff}
+.subtitle{color:#dbeafe;margin-top:10px}
+.container{max-width:850px;margin:auto;padding:20px}
+.search{
+ width:100%;padding:17px 20px;
+ border:1px solid #405274;
+ border-radius:15px;
+ background:#1b2942;color:white;
+ font-size:16px;outline:none;
+ margin:12px 0 20px;
+}
+.search:focus{border-color:#65a8ff}
+.heading{font-size:21px;font-weight:bold;margin:20px 0}
+.count{color:#9bb4d8;font-size:13px}
+.item{
+ background:linear-gradient(145deg,#1c2c49,#172238);
+ border:1px solid #344969;
+ border-radius:20px;
+ padding:20px;
+ margin:15px 0;
+ box-shadow:0 8px 20px #0003;
+ transition:.2s;
+}
+.item h3{font-size:21px;margin:0 0 12px}
+.version{
+ display:inline-block;
+ background:#164e9c;
+ color:#b9dcff;
+ padding:5px 11px;
+ border-radius:20px;
+ font-size:12px;
+ margin-bottom:12px;
+}
+.desc{color:#c4d1e5;line-height:1.6}
+.download{
+ display:block;
+ text-align:center;
+ text-decoration:none;
+ background:linear-gradient(100deg,#2878f5,#6550e8);
+ color:white;padding:15px;
+ border-radius:12px;
+ font-weight:bold;
+ margin-top:18px;
+}
+.download:active{transform:scale(.98)}
+.empty{
+ text-align:center;padding:35px 15px;
+ background:#1b2942;border-radius:18px;
+ color:#a9bddb;
+}
+footer{
+ text-align:center;padding:30px 15px;
+ color:#8194b4;font-size:13px;
+}
 </style>
 </head>
 <body>
-<h1>STB APK STORE</h1>
-<p>Katalog aplikasi Android TV dan STB.</p>
-<div id="apps">Memuat aplikasi...</div>
+<header>
+ <div class="logo">STB <span>APK STORE</span></div>
+ <div class="subtitle">Pusat aplikasi Android TV & Smart STB</div>
+</header>
+
+<main class="container">
+ <input class="search" id="search"
+ placeholder="Cari aplikasi favorit kamu...">
+
+ <div class="heading">
+  Aplikasi tersedia
+  <div class="count" id="count">Memuat katalog...</div>
+ </div>
+
+ <div id="apps">
+  <div class="empty">Memuat aplikasi...</div>
+ </div>
+</main>
+
+<footer>
+ STB APK STORE<br>
+ Download aplikasi Android TV dengan mudah.
+</footer>
+
 <script>
+let allApps=[];
+
+function showApps(list){
+ const box=document.getElementById('apps');
+ const count=document.getElementById('count');
+ box.innerHTML='';
+ count.textContent=list.length+' aplikasi ditemukan';
+
+ if(!list.length){
+  box.innerHTML='<div class="empty">Aplikasi tidak ditemukan.</div>';
+  return;
+ }
+
+ list.forEach(a=>{
+  const item=document.createElement('div');
+  item.className='item';
+
+  const title=document.createElement('h3');
+  title.textContent='📦 '+a.name;
+
+  const version=document.createElement('div');
+  version.className='version';
+  version.textContent='VERSI '+a.version;
+
+  const desc=document.createElement('p');
+  desc.className='desc';
+  desc.textContent=a.description||'Aplikasi Android TV dan STB.';
+
+  const link=document.createElement('a');
+  link.className='download';
+  link.href=a.downloadUrl;
+  link.textContent='⬇ DOWNLOAD APK';
+  link.setAttribute('download','');
+
+  item.append(title,version,desc,link);
+  box.appendChild(item);
+ });
+}
+
 fetch('/api/apps')
-.then(r=>r.json())
-.then(apps=>{
-const box=document.getElementById('apps');
-box.innerHTML='';
-if(!apps.length){box.textContent='Belum ada aplikasi.';return;}
-apps.forEach(a=>{
-const item=document.createElement('div');
-item.className='item';
-const title=document.createElement('h3');
-title.textContent=a.name+' - '+a.version;
-const desc=document.createElement('p');
-desc.textContent=a.description||'';
-const link=document.createElement('a');
-link.href=a.downloadUrl;
-link.textContent='DOWNLOAD APK';
-item.append(title,desc,link);
-box.appendChild(item);
-});
+.then(r=>{
+ if(!r.ok) throw new Error('Gagal mengambil katalog');
+ return r.json();
 })
-.catch(()=>document.getElementById('apps').textContent='Gagal memuat aplikasi.');
+.then(apps=>{
+ allApps=apps;
+ showApps(allApps);
+})
+.catch(()=>{
+ document.getElementById('apps').innerHTML=
+ '<div class="empty">Gagal memuat aplikasi. Silakan muat ulang halaman.</div>';
+});
+
+document.getElementById('search').addEventListener('input',function(){
+ const q=this.value.toLowerCase();
+ showApps(allApps.filter(a=>
+  (a.name+' '+a.version+' '+(a.description||''))
+  .toLowerCase().includes(q)
+ ));
+});
 </script>
 </body>
 </html>`));
+
 app.get("/admin", (_req, res) => res.type("html").send(`<!doctype html>
 <html lang="id">
 <head>
