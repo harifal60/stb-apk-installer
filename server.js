@@ -5,11 +5,11 @@ import path from "node:path";
 import crypto from "node:crypto";
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8080;
 const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), "data");
 const APK_DIR = path.join(DATA_DIR, "apks");
 const DB_FILE = path.join(DATA_DIR, "apps.json");
-const ADMIN_TOKEN = process.env.ADMIN_TOKEN;
+const ADMIN_TOKEN = (process.env.ADMIN_TOKEN || "").trim();
 
 fs.mkdirSync(APK_DIR, { recursive: true });
 if (!fs.existsSync(DB_FILE)) fs.writeFileSync(DB_FILE, "[]");
@@ -18,32 +18,37 @@ app.use(express.json());
 app.use("/apks", express.static(APK_DIR));
 
 function readApps() {
-  try { return JSON.parse(fs.readFileSync(DB_FILE, "utf8")); }
-  catch { return []; }
+  try {
+    const data = JSON.parse(fs.readFileSync(DB_FILE, "utf8"));
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
 }
+
 function writeApps(apps) {
   fs.writeFileSync(DB_FILE, JSON.stringify(apps, null, 2));
 }
+
 function requireAdmin(req, res, next) {
-  const token = req.get("x-admin-token") || req.body?.token;
+  const token = (req.get("x-admin-token") || "").trim();
   if (!ADMIN_TOKEN || token !== ADMIN_TOKEN) {
-    return res.status(401).json({ error: "Token admin salah atau belum disetel." });
+    return res.status(401).json({ error: "Token admin salah atau ADMIN_TOKEN di Railway belum cocok." });
   }
   next();
 }
+
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, APK_DIR),
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `${crypto.randomUUID()}${ext}`);
-  }
+  filename: (_req, file, cb) => cb(null, `${crypto.randomUUID()}${path.extname(file.originalname).toLowerCase()}`)
 });
+
 const upload = multer({
   storage,
   limits: { fileSize: 1024 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     if (path.extname(file.originalname).toLowerCase() !== ".apk") {
-      return cb(new Error("Hanya file .apk yang diperbolehkan."));
+      return cb(new Error("Hanya file dengan ekstensi .apk yang diperbolehkan."));
     }
     cb(null, true);
   }
@@ -53,48 +58,128 @@ app.get("/", (_req, res) => res.redirect("/admin"));
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 app.get("/api/apps", (req, res) => {
   const base = `${req.protocol}://${req.get("host")}`;
-  const apps = readApps().map(a => ({ ...a, downloadUrl: `${base}/apks/${encodeURIComponent(a.file)}` }));
+  const apps = readApps().map(a => ({
+    ...a,
+    downloadUrl: `${base}/apks/${encodeURIComponent(a.file)}`
+  }));
   res.json(apps);
 });
 
 app.get("/admin", (_req, res) => res.type("html").send(`<!doctype html>
-<html lang="id"><meta name="viewport" content="width=device-width,initial-scale=1">
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>STB APK Installer Admin</title>
 <style>
-body{font:16px Arial;background:#101522;color:#fff;max-width:760px;margin:35px auto;padding:0 18px}
-input,textarea,button{box-sizing:border-box;width:100%;padding:13px;margin:7px 0;border-radius:8px;border:1px solid #39445c;background:#1b2638;color:white}
-button{background:#2878e7;border:0;font-weight:bold;cursor:pointer} .item{background:#1b2638;padding:14px;margin:10px 0;border-radius:10px}
-small{color:#b7c3d8} h1{color:#72aaff}
+*{box-sizing:border-box}
+body{font:16px Arial,sans-serif;background:#101522;color:#fff;max-width:760px;margin:35px auto;padding:0 18px}
+input,textarea,button{width:100%;padding:13px;margin:7px 0;border-radius:8px;border:1px solid #39445c;background:#1b2638;color:white;font:inherit}
+input[type=file]{padding:16px}
+button{background:#2878e7;border:0;font-weight:bold;cursor:pointer}
+button:disabled{opacity:.65;cursor:wait}
+.item{background:#1b2638;padding:14px;margin:10px 0;border-radius:10px}
+small{color:#b7c3d8}h1{color:#72aaff}
+#msg{white-space:pre-wrap;overflow-wrap:anywhere}.success{color:#75d69a}.error{color:#ff9292}
 </style>
-<h1>STB APK Installer</h1><p>Panel upload APK untuk katalog aplikasi STB.</p>
-<label>Token Admin</label><input id="token" type="password" placeholder="Masukkan ADMIN_TOKEN">
+</head>
+<body>
+<h1>STB APK Installer</h1>
+<p>Panel upload APK untuk katalog aplikasi STB.</p>
+<label for="token">Token Admin</label>
+<input id="token" type="password" autocomplete="off" placeholder="Masukkan ADMIN_TOKEN">
 <form id="f">
 <input name="name" placeholder="Nama aplikasi" required>
 <input name="version" placeholder="Versi, contoh 1.0.2" required>
 <textarea name="description" placeholder="Deskripsi aplikasi"></textarea>
 <input name="apk" type="file" accept=".apk,application/vnd.android.package-archive" required>
-<button>Upload APK</button>
-</form><p id="msg"></p><h2>Daftar aplikasi</h2><div id="apps"></div>
+<button id="uploadBtn" type="submit">Upload APK</button>
+</form>
+<p id="msg" role="status" aria-live="polite"></p>
+<h2>Daftar aplikasi</h2>
+<div id="apps">Memuat daftar aplikasi...</div>
 <script>
-const $=id=>document.getElementById(id);
-async function load(){
- const r=await fetch('/api/apps'); const a=await r.json();
- $('apps').innerHTML=a.map(x=>'<div class="item"><b>'+esc(x.name)+'</b> — '+esc(x.version)+'<br><small>'+esc(x.description||'')+'</small><br><button onclick="del(\\''+x.id+'\\')">Hapus</button></div>').join('')||'Belum ada APK.';
+const $ = id => document.getElementById(id);
+function showMessage(message, kind) {
+  $("msg").textContent = message;
+  $("msg").className = kind || "";
 }
-function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-$('f').onsubmit=async e=>{
- e.preventDefault(); const d=new FormData(e.target);
- const r=await fetch('/api/apps',{method:'POST',headers:{'x-admin-token':$('token').value},body:d});
- const j=await r.json(); $('msg').textContent=r.ok?'Upload berhasil.':(j.error||'Gagal upload.');
- if(r.ok){e.target.reset();load();}
-};
-async function del(id){
- if(!confirm('Hapus aplikasi ini?'))return;
- const r=await fetch('/api/apps/'+id,{method:'DELETE',headers:{'x-admin-token':$('token').value}});
- const j=await r.json(); $('msg').textContent=r.ok?'Aplikasi dihapus.':(j.error||'Gagal menghapus.');load();
+function esc(value) {
+  return String(value ?? "").replace(/[&<>"']/g, c => ({
+    "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"
+  })[c]);
 }
-load();
-</script></html>`));
+async function readJson(response) {
+  const body = await response.text();
+  try { return body ? JSON.parse(body) : {}; }
+  catch { throw new Error("Server mengirim respons tidak valid (HTTP " + response.status + ")."); }
+}
+async function loadApps() {
+  try {
+    const response = await fetch("/api/apps", { cache: "no-store" });
+    if (!response.ok) throw new Error("Gagal memuat daftar aplikasi (HTTP " + response.status + ").");
+    const apps = await readJson(response);
+    $("apps").innerHTML = apps.map(item =>
+      '<div class="item"><b>' + esc(item.name) + '</b> — ' + esc(item.version) +
+      '<br><small>' + esc(item.description || "") + '</small><br>' +
+      '<a style="color:#8dbaff" href="' + esc(item.downloadUrl) + '">Download APK</a> ' +
+      '<button type="button" class="deleteBtn" data-id="' + esc(item.id) + '">Hapus</button></div>'
+    ).join("") || "Belum ada APK.";
+  } catch (error) {
+    $("apps").textContent = error.message || "Tidak bisa memuat daftar aplikasi.";
+  }
+}
+
+$("f").addEventListener("submit", async event => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const file = form.elements.apk.files[0];
+  if (!file) return showMessage("Pilih file APK terlebih dahulu.", "error");
+  if (!file.name.toLowerCase().endsWith(".apk")) return showMessage("File harus berakhiran .apk.", "error");
+  if (!$("token").value.trim()) return showMessage("Token admin wajib diisi.", "error");
+
+  const button = $("uploadBtn");
+  button.disabled = true;
+  button.textContent = "Sedang mengupload...";
+  showMessage("Mengirim file ke server. Tunggu sampai proses selesai.", "");
+  try {
+    const response = await fetch("/api/apps", {
+      method: "POST",
+      headers: { "x-admin-token": $("token").value.trim() },
+      body: new FormData(form)
+    });
+    const result = await readJson(response);
+    if (!response.ok) throw new Error(result.error || ("Upload gagal (HTTP " + response.status + ")."));
+    showMessage("Upload berhasil: " + result.name + " versi " + result.version, "success");
+    form.reset();
+    await loadApps();
+  } catch (error) {
+    showMessage("Upload gagal: " + (error.message || "Koneksi ke server terputus."), "error");
+  } finally {
+    button.disabled = false;
+    button.textContent = "Upload APK";
+  }
+});
+
+$("apps").addEventListener("click", async event => {
+  const button = event.target.closest(".deleteBtn");
+  if (!button || !confirm("Hapus aplikasi ini?")) return;
+  try {
+    const response = await fetch("/api/apps/" + encodeURIComponent(button.dataset.id), {
+      method: "DELETE",
+      headers: { "x-admin-token": $("token").value.trim() }
+    });
+    const result = await readJson(response);
+    if (!response.ok) throw new Error(result.error || "Gagal menghapus aplikasi.");
+    showMessage("Aplikasi berhasil dihapus.", "success");
+    await loadApps();
+  } catch (error) {
+    showMessage(error.message || "Gagal menghapus aplikasi.", "error");
+  }
+});
+loadApps();
+</script>
+</body></html>`));
 
 app.post("/api/apps", requireAdmin, upload.single("apk"), (req, res) => {
   if (!req.file) return res.status(400).json({ error: "File APK wajib dipilih." });
@@ -105,9 +190,13 @@ app.post("/api/apps", requireAdmin, upload.single("apk"), (req, res) => {
   }
   const apps = readApps();
   const item = {
-    id: crypto.randomUUID(), name: name.trim(), version: version.trim(),
-    description: description.trim(), file: req.file.filename,
-    originalName: req.file.originalname, uploadedAt: new Date().toISOString()
+    id: crypto.randomUUID(),
+    name: name.trim(),
+    version: version.trim(),
+    description: description.trim(),
+    file: req.file.filename,
+    originalName: req.file.originalname,
+    uploadedAt: new Date().toISOString()
   };
   apps.unshift(item);
   writeApps(apps);
@@ -125,6 +214,11 @@ app.delete("/api/apps/:id", requireAdmin, (req, res) => {
 });
 
 app.use((err, _req, res, _next) => {
-  res.status(400).json({ error: err.message || "Permintaan tidak valid." });
+  const message = err instanceof multer.MulterError
+    ? (err.code === "LIMIT_FILE_SIZE" ? "Ukuran APK melebihi batas 1 GB." : "Upload file gagal: " + err.message)
+    : (err.message || "Permintaan tidak valid.");
+  res.status(err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE" ? 413 : 400)
+    .json({ error: message });
 });
-app.listen(PORT, () => console.log(`STB APK Installer server listening on ${PORT}`));
+
+app.listen(PORT, "0.0.0.0", () => console.log(`STB APK Installer server listening on ${PORT}`));
