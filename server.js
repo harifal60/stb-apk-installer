@@ -317,21 +317,31 @@ async function readJson(response) {
   catch { throw new Error("Server mengirim respons tidak valid (HTTP " + response.status + ")."); }
 }
 async function loadApps() {
+  let cachedApps = [];
+
+async function loadApps() {
   try {
     const response = await fetch("/api/apps", { cache: "no-store" });
-    if (!response.ok) throw new Error("Gagal memuat daftar aplikasi (HTTP " + response.status + ").");
+    if (!response.ok) throw new Error("Gagal memuat aplikasi.");
+
     const apps = await readJson(response);
+    cachedApps = apps;
+
     $("apps").innerHTML = apps.map(item =>
-      '<div class="item"><b>' + esc(item.name) + '</b> — ' + esc(item.version) +
+      '<div class="item">' +
+      '<b>' + esc(item.icon || "📦") + ' ' + esc(item.name) + '</b> — ' + esc(item.version) +
+      '<br><small>' + esc(item.category || "Lainnya") + '</small>' +
       '<br><small>' + esc(item.description || "") + '</small><br>' +
-      '<a style="color:#8dbaff" href="' + esc(item.downloadUrl) + '">Download APK</a> ' +
-      '<button type="button" class="deleteBtn" data-id="' + esc(item.id) + '">Hapus</button></div>'
+      '<a style="color:#8dbaff" href="' + esc(item.downloadUrl) + '">Download APK</a>' +
+      '<button type="button" class="editBtn" data-id="' + esc(item.id) + '">EDIT</button>' +
+      '<button type="button" class="deleteBtn" data-id="' + esc(item.id) + '">Hapus</button>' +
+      '</div>'
     ).join("") || "Belum ada APK.";
+
   } catch (error) {
-    $("apps").textContent = error.message || "Tidak bisa memuat daftar aplikasi.";
+    $("apps").textContent = error.message;
   }
 }
-
 $("f").addEventListener("submit", async event => {
   event.preventDefault();
   const form = event.currentTarget;
