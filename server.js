@@ -143,30 +143,52 @@ footer{
 }
 </style>
 </head>
+
 <body>
+
 <header>
- <div class="logo">STB <span>APK STORE</span></div>
- <div class="subtitle">Pusat aplikasi Android TV & Smart STB</div>
+  <div class="logo">📺 STB <span>APK STORE</span></div>
+  <div class="subtitle">
+    Pusat aplikasi Android TV & Smart STB
+  </div>
+  <p style="margin-top:20px;font-size:14px;color:#dbeafe">
+    Temukan dan download aplikasi favoritmu dengan mudah.
+  </p>
 </header>
 
 <main class="container">
- <input class="search" id="search"
- placeholder="Cari aplikasi favorit kamu...">
 
- <div class="heading">
-  Aplikasi tersedia
-  <div class="count" id="count">Memuat katalog...</div>
- </div>
+  <div style="margin:15px 0 25px;padding:18px;background:#1b2942;border-radius:16px">
+    <h3 style="margin:0 0 8px">👋 Selamat Datang!</h3>
+    <p style="margin:0;color:#a9bddb;font-size:14px">
+      Koleksi aplikasi pilihan untuk Android TV dan Smart STB.
+    </p>
+  </div>
 
- <div id="apps">
-  <div class="empty">Memuat aplikasi...</div>
- </div>
+  <input
+    class="search"
+    id="search"
+    placeholder="🔍 Cari aplikasi favorit kamu..."
+  >
+
+  <div class="heading">
+    Aplikasi tersedia
+    <div class="count" id="count">Memuat katalog...</div>
+  </div>
+
+  <div id="apps">
+    <div class="empty">Memuat aplikasi...</div>
+  </div>
+
 </main>
 
 <footer>
- STB APK STORE<br>
- Download aplikasi Android TV dengan mudah.
+  <b>📺 STB APK STORE</b><br>
+  Pusat download aplikasi Android TV.<br>
+  <small>© 2026 STB APK STORE</small>
 </footer>
+</body>
+
 
 <script>
 let allApps=[];
