@@ -282,6 +282,17 @@ small{color:#b7c3d8}h1{color:#72aaff}
 <input name="name" placeholder="Nama aplikasi" required>
 <input name="version" placeholder="Versi, contoh 1.0.2" required>
 <textarea name="description" placeholder="Deskripsi aplikasi"></textarea>
+
+<input name="icon" placeholder="Ikon aplikasi, contoh 📺 atau 🎬" maxlength="12">
+
+<select name="category">
+  <option value="IPTV">IPTV</option>
+  <option value="TV & Hiburan">TV & Hiburan</option>
+  <option value="Tools">Tools</option>
+  <option value="Pemutar Video">Pemutar Video</option>
+  <option value="Lainnya" selected>Lainnya</option>
+</select>
+
 <input name="apk" type="file" accept=".apk,application/vnd.android.package-archive" required>
 <button id="uploadBtn" type="submit">Upload APK</button>
 </form>
