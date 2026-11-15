@@ -342,7 +342,99 @@ async function loadApps() {
     $("apps").textContent = error.message;
   }
 }
+$("apps").addEventListener("click", async event => {
+  const edit = event.target.closest(".editBtn");
+  const del = event.target.closest(".deleteBtn");
+
+  if (edit) {
+    const item = cachedApps.find(a => a.id === edit.dataset.id);
+    if (!item) return;
+
+    const form = $("f");
+    form.elements.appId.value = item.id;
+    form.elements.name.value = item.name;
+    form.elements.version.value = item.version;
+    form.elements.description.value = item.description || "";
+    form.elements.icon.value = item.icon || "";
+    form.elements.category.value = item.category || "Lainnya";
+    form.elements.apk.value = "";
+
+    $("uploadBtn").textContent = "Simpan Perubahan";
+    showMessage("Mode edit: " + item.name, "success");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    return;
+  }
+
+  if (del) {
+    if (!confirm("Hapus aplikasi ini?")) return;
+
+    try {
+      const response = await fetch(
+        "/api/apps/" + encodeURIComponent(del.dataset.id),
+        {
+          method: "DELETE",
+          headers: { "x-admin-token": $("token").value.trim() }
+        }
+      );
+
+      const result = await readJson(response);
+      if (!response.ok) throw new Error(result.error);
+
+      showMessage("Aplikasi berhasil dihapus.", "success");
+      await loadApps();
+    } catch (error) {
+      showMessage(error.message, "error");
+    }
+  }
+});
+
 $("f").addEventListener("submit", async event => {
+  event.preventDefault();
+
+  const form = event.currentTarget;
+  const id = form.elements.appId.value;
+  const file = form.elements.apk.files[0];
+
+  if (!id && !file) {
+    return showMessage("Pilih file APK terlebih dahulu.", "error");
+  }
+
+  if (file && !file.name.toLowerCase().endsWith(".apk")) {
+    return showMessage("File harus berakhiran .apk.", "error");
+  }
+
+  if (!$("token").value.trim()) {
+    return showMessage("Token admin wajib diisi.", "error");
+  }
+
+  const button = $("uploadBtn");
+  button.disabled = true;
+
+  try {
+    const response = await fetch(
+      id ? "/api/apps/" + encodeURIComponent(id) : "/api/apps",
+      {
+        method: id ? "PUT" : "POST",
+        headers: { "x-admin-token": $("token").value.trim() },
+        body: new FormData(form)
+      }
+    );
+
+    const result = await readJson(response);
+    if (!response.ok) throw new Error(result.error);
+
+    showMessage("Data aplikasi berhasil disimpan.", "success");
+    form.reset();
+    form.elements.appId.value = "";
+    button.textContent = "Upload APK";
+    await loadApps();
+
+  } catch (error) {
+    showMessage(error.message || "Gagal menyimpan aplikasi.", "error");
+  } finally {
+    button.disabled = false;
+  }
+});
   event.preventDefault();
   const form = event.currentTarget;
   const file = form.elements.apk.files[0];
@@ -393,28 +485,46 @@ loadApps();
 </script>
 </body></html>`));
 
-app.post("/api/apps", requireAdmin, upload.single("apk"), (req, res) => {
-  if (!req.file) return res.status(400).json({ error: "File APK wajib dipilih." });
-  const { name, version, description = "" } = req.body;
+app.put("/api/apps/:id", requireAdmin, upload.single("apk"), (req, res) => {
+  const apps = readApps();
+  const item = apps.find(a => a.id === req.params.id);
+
+  if (!item) {
+    if (req.file) fs.unlinkSync(req.file.path);
+    return res.status(404).json({ error: "Aplikasi tidak ditemukan." });
+  }
+
+  const { name, version, description = "", icon = "", category = "Lainnya" } = req.body;
+
   if (!name?.trim() || !version?.trim()) {
-    fs.unlinkSync(req.file.path);
+    if (req.file) fs.unlinkSync(req.file.path);
     return res.status(400).json({ error: "Nama dan versi wajib diisi." });
   }
-  const apps = readApps();
-  const item = {
-    id: crypto.randomUUID(),
-    name: name.trim(),
-    version: version.trim(),
-    description: description.trim(),
-    file: req.file.filename,
-    originalName: req.file.originalname,
-    uploadedAt: new Date().toISOString()
-  };
-  apps.unshift(item);
-  writeApps(apps);
-  res.status(201).json(item);
-});
 
+  const oldFile = item.file;
+
+  item.name = name.trim();
+  item.version = version.trim();
+  item.description = description.trim();
+  item.icon = icon.trim();
+  item.category = category;
+
+  if (req.file) {
+    item.file = req.file.filename;
+    item.originalName = req.file.originalname;
+  }
+
+  item.updatedAt = new Date().toISOString();
+
+  writeApps(apps);
+
+  if (req.file) {
+    const oldPath = path.join(APK_DIR, path.basename(oldFile));
+    if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+  }
+
+  res.json({ ok: true, name: item.name, version: item.version });
+});
 app.delete("/api/apps/:id", requireAdmin, (req, res) => {
   const apps = readApps();
   const item = apps.find(a => a.id === req.params.id);
