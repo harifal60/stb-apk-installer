@@ -54,7 +54,7 @@ const upload = multer({
   }
 });
 
-app.get("/", (_req, res) => res.redirect("/admin"));
+app.get("/", (_req, res) => res.redirect("/catalog"));
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 app.get("/api/apps", (req, res) => {
   const base = `${req.protocol}://${req.get("host")}`;
@@ -64,7 +64,49 @@ app.get("/api/apps", (req, res) => {
   }));
   res.json(apps);
 });
-
+app.get("/catalog", (_req, res) => res.send(`<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>STB APK Store</title>
+<style>
+body{font-family:Arial;background:#101522;color:white;padding:20px;margin:auto;max-width:700px}
+h1{color:#72aaff}
+.item{background:#1b2638;padding:18px;margin:15px 0;border-radius:12px}
+a{display:block;background:#2878e7;color:white;text-align:center;padding:13px;border-radius:8px;text-decoration:none;margin-top:12px}
+small{color:#aaa}
+</style>
+</head>
+<body>
+<h1>STB APK STORE</h1>
+<p>Katalog aplikasi Android TV dan STB.</p>
+<div id="apps">Memuat aplikasi...</div>
+<script>
+fetch('/api/apps')
+.then(r=>r.json())
+.then(apps=>{
+const box=document.getElementById('apps');
+box.innerHTML='';
+if(!apps.length){box.textContent='Belum ada aplikasi.';return;}
+apps.forEach(a=>{
+const item=document.createElement('div');
+item.className='item';
+const title=document.createElement('h3');
+title.textContent=a.name+' - '+a.version;
+const desc=document.createElement('p');
+desc.textContent=a.description||'';
+const link=document.createElement('a');
+link.href=a.downloadUrl;
+link.textContent='DOWNLOAD APK';
+item.append(title,desc,link);
+box.appendChild(item);
+});
+})
+.catch(()=>document.getElementById('apps').textContent='Gagal memuat aplikasi.');
+</script>
+</body>
+</html>`));
 app.get("/admin", (_req, res) => res.type("html").send(`<!doctype html>
 <html lang="id">
 <head>
